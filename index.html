@@ -16,7 +16,7 @@
 :root{--bg:#fbfaf7;--ink:#16160f;--muted:#86857d;--grid:#e7e6df;--good:#17986a;--bad:#e2602a;--goodbg:#dcf2e8;--badbg:#fbe4d8}
 @media (prefers-color-scheme:dark){:root{--bg:#121211;--ink:#f1f0ea;--muted:#8f8e86;--grid:#2b2b28;--good:#35b98a;--bad:#f0794a;--goodbg:#15382b;--badbg:#452316}}
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hidden;overscroll-behavior:none}
+html,body{height:100%;height:100dvh;margin:0;background:var(--bg);color:var(--ink);overflow:hidden;overscroll-behavior:none}
 body{font:15px/1.2 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;font-variant-numeric:tabular-nums}
 #app{position:fixed;inset:0;display:flex;flex-direction:column;padding:max(10px,env(safe-area-inset-top)) env(safe-area-inset-right) max(6px,env(safe-area-inset-bottom)) env(safe-area-inset-left)}
 #read{flex:none;height:58px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px 0 12px}
@@ -25,21 +25,20 @@ body{font:15px/1.2 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Rob
 #price small{font-size:13px;font-weight:500;color:var(--muted);margin-left:3px}
 #chip{flex:none;padding:8px 12px;border-radius:999px;font-size:14px;font-weight:650;white-space:nowrap;text-align:right}
 #chip.good{background:var(--goodbg);color:var(--good)}#chip.bad{background:var(--badbg);color:var(--bad)}#chip.none{color:var(--muted);font-weight:500}
-#chart{flex:1;position:relative;min-height:0}
-#axis{position:absolute;left:0;top:0;bottom:0;width:38px}
-#scroll{position:absolute;left:38px;right:0;top:0;bottom:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-#scroll::-webkit-scrollbar{display:none}
+#chart{flex:1;position:relative;min-height:0;touch-action:none}
+#plot{position:absolute;inset:0;width:100%;height:100%}
 svg{display:block}
 svg text{font:11.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;fill:var(--muted)}
 svg text.day{font-weight:650;font-size:12px;fill:var(--ink)}
 svg text.thr{font-weight:700;fill:var(--ink);paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round}
+svg text.wait{font-size:13px}
 svg text.demo{font-size:34px;font-weight:800;fill:var(--muted);opacity:.22;letter-spacing:.08em}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="read"><div><div id="when">&nbsp;</div><div id="price">&nbsp;</div></div><div id="chip" class="none"></div></div>
-  <div id="chart"><svg id="axis"></svg><div id="scroll"><svg id="plot"></svg></div></div>
+  <div id="chart"><svg id="plot"></svg></div>
 </div>
 <script>
 "use strict";
@@ -104,49 +103,51 @@ async function load() {
 
 /* ---- tekenen ---- */
 function niceStep(raw) { var c = [10, 20, 25, 50, 100, 200, 250, 500, 1000]; for (var i = 0; i < c.length; i++) if (c[i] >= raw) return c[i]; return 2000; }
-function visibleDays() { var today = bxl(Date.now()).date, out = []; [today, addDays(today, 1)].forEach(function (d) { if (S.days[d]) out.push(d); }); return out; }
 function nowSlot() { var now = Date.now(), d = bxl(now).date, s = S.days[d]; if (!s) return null; for (var i = 0; i < s.length; i++) if (now >= s[i].t && now < s[i].t + QMS) return { day: d, i: i }; return null; }
+function anyData() { var t = bxl(Date.now()).date; return !!(S.days[t] || S.days[addDays(t, 1)]); }
 
 function render() {
-  var days = visibleDays(), scroll = el("scroll"), plot = el("plot"), axis = el("axis");
-  var cw = scroll.clientWidth, H = scroll.clientHeight, T = 26, B = 22, ih = H - T - B;
-  if (!days.length || ih < 40) { plot.setAttribute("width", cw); plot.setAttribute("height", H); plot.innerHTML = ""; axis.innerHTML = ""; S.geo = null; readout(); return; }
-  var dw = cw >= 620 ? cw / 2 : cw, Wp = dw * days.length;
+  var box = el("chart"), plot = el("plot"), W = box.clientWidth, H = box.clientHeight;
+  var today = bxl(Date.now()).date, days = [today, addDays(today, 1)];
+  if (W < 50 || H < 80) { plot.innerHTML = ""; S.geo = null; return; }
+  var side = W > H, pw = side ? W / 2 : W, ph = side ? H : H / 2, AX = 34, T = 22, B = 18;
   var lo = 0, hi = 50;
-  days.forEach(function (d) { S.days[d].forEach(function (s) { if (s.p < lo) lo = s.p; if (s.p > hi) hi = s.p; }); hi = Math.max(hi, threshold(d) * 1.1); });
-  var ns = niceStep((hi - lo) / 4.5); lo = Math.floor(lo / ns) * ns; hi = Math.ceil(hi / ns) * ns;
-  var y = function (v) { return T + ih * (1 - (v - lo) / (hi - lo)); };
-  var now = Date.now(), ns0 = nowSlot(), g = "", a = "";
-  for (var v = lo; v <= hi + 0.01; v += ns) { g += '<line x1="0" x2="' + Wp + '" y1="' + y(v) + '" y2="' + y(v) + '" style="stroke:var(--grid)" stroke-width="' + (v === 0 ? 1.5 : 1) + '"/>'; a += '<text x="32" y="' + (y(v) + 4) + '" text-anchor="end">' + n0(v) + "</text>"; }
-  var geo = { dw: dw, days: [] };
+  days.forEach(function (d) { hi = Math.max(hi, threshold(d) * 1.1); (S.days[d] || []).forEach(function (s) { if (s.p < lo) lo = s.p; if (s.p > hi) hi = s.p; }); });
+  var ns = niceStep((hi - lo) / (ph > 260 ? 4.5 : 3)); lo = Math.floor(lo / ns) * ns; hi = Math.ceil(hi / ns) * ns;
+  var now = Date.now(), ns0 = nowSlot(), g = "", geo = [];
   days.forEach(function (d, k) {
-    var s = S.days[d], x0 = k * dw, bw = dw / s.length, thr = threshold(d), gap = bw > 3 ? 0.8 : 0.35;
-    geo.days.push({ day: d, x0: x0, bw: bw, n: s.length });
-    if (k > 0) g += '<line x1="' + x0 + '" x2="' + x0 + '" y1="6" y2="' + (H - B) + '" style="stroke:var(--muted)" stroke-width="1" stroke-dasharray="2 4"/>';
-    g += '<text class="day" x="' + (x0 + 6) + '" y="15">' + dayLabelFmt.format(new Date(s[Math.floor(s.length / 2)].t)).replace(".", "") + "</text>";
-    s.forEach(function (sl, i) {
-      var x = x0 + i * bw + gap / 2, w = bw - gap, y0 = y(0), y1 = y(sl.p), top = Math.min(y0, y1), h = Math.max(1.5, Math.abs(y0 - y1));
-      var past = sl.t + QMS <= now, isSel = S.sel && S.sel.day === d && S.sel.i === i;
-      g += '<rect x="' + x.toFixed(2) + '" y="' + top.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + Math.min(1.5, w / 2).toFixed(2) + '" style="fill:var(' + (sl.p <= thr ? "--good" : "--bad") + ')" opacity="' + (isSel ? 1 : past ? 0.3 : 0.92) + '"/>';
-      var b = bxl(sl.t); if (b.m === 0 && b.h % 3 === 0) g += '<text x="' + (x0 + i * bw).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + (b.h === 0 ? "start" : "middle") + '">' + pad(b.h) + "</text>";
-    });
-    g += '<line x1="' + x0 + '" x2="' + (x0 + dw) + '" y1="' + y(thr) + '" y2="' + y(thr) + '" style="stroke:var(--ink)" stroke-width="1.6" stroke-dasharray="5 4"/>';
-    g += '<text class="thr" x="' + (x0 + dw - 6) + '" y="' + (y(thr) - 6) + '" text-anchor="end">' + n0(thr) + "</text>";
-    if (ns0 && ns0.day === d) { var xn = x0 + (ns0.i + 0.5) * bw; g += '<line x1="' + xn + '" x2="' + xn + '" y1="' + (T - 6) + '" y2="' + (H - B) + '" style="stroke:var(--ink)" stroke-width="1.4"/><circle cx="' + xn + '" cy="' + (T - 6) + '" r="3.2" style="fill:var(--ink)"/>'; }
-    if (S.sel && S.sel.day === d) { var xs = x0 + (S.sel.i + 0.5) * bw; g += '<line x1="' + xs + '" x2="' + xs + '" y1="' + (T - 6) + '" y2="' + (H - B) + '" style="stroke:var(--ink)" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>'; }
-    if (S.demo) g += '<text class="demo" x="' + (x0 + dw / 2) + '" y="' + (T + ih * 0.3) + '" text-anchor="middle">VOORBEELD</text>';
+    var px = side ? k * pw : 0, py = side ? 0 : k * ph, x0 = px + AX, iw = pw - AX - (side && k === 0 ? 6 : 2), ih = ph - T - B, yb = py + T + ih;
+    var y = function (v) { return py + T + ih * (1 - (v - lo) / (hi - lo)); };
+    var s = S.days[d], thr = threshold(d), mid = dayStartMs(d) + 12 * 3600000;
+    for (var v = lo; v <= hi + 0.01; v += ns) g += '<line x1="' + x0 + '" x2="' + (x0 + iw) + '" y1="' + y(v) + '" y2="' + y(v) + '" style="stroke:var(--grid)" stroke-width="' + (v === 0 ? 1.5 : 1) + '"/><text x="' + (x0 - 5) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + n0(v) + "</text>";
+    g += '<text class="day" x="' + x0 + '" y="' + (py + 14) + '">' + dayLabelFmt.format(new Date(mid)).replace(".", "") + "</text>";
+    if (!s) {
+      g += '<text class="wait" x="' + (x0 + iw / 2) + '" y="' + (py + T + ih / 2) + '" text-anchor="middle">' + (k === 1 ? "prijzen volgen rond 13 uur" : "geen prijzen") + "</text>";
+      for (var hh = 0; hh < 24; hh += 3) g += '<text x="' + (x0 + iw * hh / 24).toFixed(1) + '" y="' + (yb + 13) + '" text-anchor="' + (hh === 0 ? "start" : "middle") + '">' + pad(hh) + "</text>";
+    } else {
+      var bw = iw / s.length, gap = bw > 3 ? 0.8 : 0.3;
+      geo.push({ day: d, x0: x0, x1: x0 + iw, y0: py, y1: py + ph, bw: bw, n: s.length });
+      s.forEach(function (sl, i) {
+        var x = x0 + i * bw + gap / 2, w = bw - gap, yz = y(0), y1 = y(sl.p), top = Math.min(yz, y1), h = Math.max(1.5, Math.abs(yz - y1));
+        var past = sl.t + QMS <= now, isSel = S.sel && S.sel.day === d && S.sel.i === i;
+        g += '<rect x="' + x.toFixed(2) + '" y="' + top.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + Math.min(1.5, w / 2).toFixed(2) + '" style="fill:var(' + (sl.p <= thr ? "--good" : "--bad") + ')" opacity="' + (isSel ? 1 : past ? 0.3 : 0.92) + '"/>';
+        var b = bxl(sl.t); if (b.m === 0 && b.h % 3 === 0) g += '<text x="' + (x0 + i * bw).toFixed(1) + '" y="' + (yb + 13) + '" text-anchor="' + (b.h === 0 ? "start" : "middle") + '">' + pad(b.h) + "</text>";
+      });
+      if (ns0 && ns0.day === d) { var xn = x0 + (ns0.i + 0.5) * bw; g += '<line x1="' + xn + '" x2="' + xn + '" y1="' + (py + T - 5) + '" y2="' + yb + '" style="stroke:var(--ink)" stroke-width="1.4"/><circle cx="' + xn + '" cy="' + (py + T - 5) + '" r="3" style="fill:var(--ink)"/>'; }
+      if (S.sel && S.sel.day === d) { var xs = x0 + (S.sel.i + 0.5) * bw, ys = y(s[S.sel.i].p); g += '<line x1="' + xs + '" x2="' + xs + '" y1="' + (py + T - 5) + '" y2="' + yb + '" style="stroke:var(--ink)" stroke-width="1" stroke-dasharray="2 3"/><circle cx="' + xs + '" cy="' + ys + '" r="4.5" style="fill:var(--bg);stroke:var(--ink)" stroke-width="2"/>'; }
+    }
+    g += '<line x1="' + x0 + '" x2="' + (x0 + iw) + '" y1="' + y(thr) + '" y2="' + y(thr) + '" style="stroke:var(--ink)" stroke-width="1.6" stroke-dasharray="5 4"/>';
+    g += '<text class="thr" x="' + (x0 + iw - 3) + '" y="' + (y(thr) - 6) + '" text-anchor="end">' + n0(thr) + "</text>";
+    if (S.demo) g += '<text class="demo" x="' + (x0 + iw / 2) + '" y="' + (py + T + ih * 0.3) + '" text-anchor="middle">VOORBEELD</text>';
   });
-  plot.setAttribute("width", Wp); plot.setAttribute("height", H); plot.innerHTML = g;
-  axis.setAttribute("width", 38); axis.setAttribute("height", H); axis.innerHTML = a;
-  S.geo = geo;
-  if (!S.placed) { S.placed = true; if (ns0 && days.length > 1 && dw === cw) scroll.scrollLeft = Math.max(0, (ns0.i - 6) * geo.days[0].bw); }
+  plot.setAttribute("viewBox", "0 0 " + W + " " + H); plot.innerHTML = g; S.geo = geo;
   readout();
 }
 
 function readout() {
   var cur = S.sel || nowSlot(), when = el("when"), price = el("price"), chip = el("chip");
   if (!cur || !S.days[cur.day] || !S.days[cur.day][cur.i]) {
-    var any = visibleDays().length > 0; when.innerHTML = "&nbsp;"; price.innerHTML = any ? "&nbsp;" : "–";
+    var any = anyData(); when.innerHTML = "&nbsp;"; price.innerHTML = any ? "&nbsp;" : "–";
     chip.className = "none"; chip.textContent = any ? "" : "geen prijzen"; return;
   }
   var sl = S.days[cur.day][cur.i], m = marginCt(cur.day, sl.p), ok = m >= 0, isNow = !S.sel;
@@ -156,18 +157,27 @@ function readout() {
   chip.textContent = (ok ? "thuis · +" : "publiek · −") + n1(m) + " ct/kWh";
 }
 
-var selTimer = null;
-el("scroll").addEventListener("click", function (ev) {
-  if (!S.geo) return; var sc = el("scroll"), x = ev.clientX - sc.getBoundingClientRect().left + sc.scrollLeft, k = Math.floor(x / S.geo.dw), d = S.geo.days[k];
-  if (!d) return; var i = Math.min(d.n - 1, Math.max(0, Math.floor((x - d.x0) / d.bw)));
-  S.sel = { day: d.day, i: i }; render();
-  clearTimeout(selTimer); selTimer = setTimeout(function () { S.sel = null; render(); }, 15000);
-});
+var selTimer = null, raf = 0;
+function pick(ev) {
+  if (!S.geo || !S.geo.length) return; var r = el("chart").getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, best = null;
+  S.geo.forEach(function (p) { if (y >= p.y0 && y < p.y1 && x >= p.x0 - 40 && x <= p.x1 + 10) best = p; });
+  if (!best) return; var i = Math.min(best.n - 1, Math.max(0, Math.floor((x - best.x0) / best.bw)));
+  if (S.sel && S.sel.day === best.day && S.sel.i === i) return;
+  S.sel = { day: best.day, i: i }; if (!raf) raf = requestAnimationFrame(function () { raf = 0; render(); });
+}
+function release() { clearTimeout(selTimer); selTimer = setTimeout(function () { S.sel = null; render(); }, 6000); }
+var chartEl = el("chart"), down = false;
+chartEl.addEventListener("pointerdown", function (e) { down = true; clearTimeout(selTimer); try { chartEl.setPointerCapture(e.pointerId); } catch (x) {} pick(e); e.preventDefault(); });
+chartEl.addEventListener("pointermove", function (e) { if (down || e.pointerType === "mouse") { clearTimeout(selTimer); pick(e); } });
+["pointerup", "pointercancel", "pointerleave"].forEach(function (n) { chartEl.addEventListener(n, function () { down = false; if (S.sel) release(); }); });
+document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
 el("read").addEventListener("click", function () { clearTimeout(selTimer); S.sel = null; render(); });
 
 async function refresh() { await load(); render(); }
-var rz = null; window.addEventListener("resize", function () { clearTimeout(rz); rz = setTimeout(function () { S.placed = false; render(); }, 120); });
-document.addEventListener("visibilitychange", function () { if (!document.hidden) { S.placed = false; refresh(); } });
+function relayout() { render(); setTimeout(render, 250); }
+window.addEventListener("resize", relayout); window.addEventListener("orientationchange", relayout);
+if (window.ResizeObserver) new ResizeObserver(function () { render(); }).observe(el("chart"));
+document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
 setInterval(function () { if (!document.hidden) refresh(); }, 300000);
 setInterval(function () { if (!document.hidden) render(); }, 60000);
 refresh();
