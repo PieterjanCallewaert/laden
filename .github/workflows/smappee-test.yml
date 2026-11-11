@@ -1,0 +1,19 @@
+name: Smappee test
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Smappee API testen
+        env:
+          SMAPPEE_CLIENT_ID: ${{ secrets.SMAPPEE_CLIENT_ID }}
+          SMAPPEE_CLIENT_SECRET: ${{ secrets.SMAPPEE_CLIENT_SECRET }}
+          SMAPPEE_USERNAME: ${{ secrets.SMAPPEE_USERNAME }}
+          SMAPPEE_PASSWORD: ${{ secrets.SMAPPEE_PASSWORD }}
+          SMAPPEE_LOCATION_ID: ${{ secrets.SMAPPEE_LOCATION_ID }}
+        run: node scripts/smappee_test.mjs
