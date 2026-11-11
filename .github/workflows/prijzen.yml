@@ -1,0 +1,33 @@
+name: Kwartierprijzen ophalen
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: prijzen
+  cancel-in-progress: false
+jobs:
+  ophalen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Prijzen ophalen
+        env:
+          ENTSOE_TOKEN: ${{ secrets.ENTSOE_TOKEN }}
+        run: node scripts/fetch_prices.mjs
+      - name: Opslaan als er iets veranderd is
+        run: |
+          if git diff --quiet -- data/prices.json; then
+            echo "Geen wijziging."
+          else
+            git config user.name "prijzen-bot"
+            git config user.email "prijzen-bot@users.noreply.github.com"
+            git add data/prices.json
+            git commit -m "Kwartierprijzen bijgewerkt"
+            git push
+          fi

@@ -1,0 +1,20 @@
+{
+  "bijgewerkt": "2026-11-11",
+  "bron": "Ecopower tariefkaart dynamische burgerstroom (vanaf 1 augustus 2026), gecontroleerd met factuur september 2026; CREG maximumtarieven thuisladen Vlaams Gewest",
+  "ecopower": {
+    "factor_per_eur_mwh": 0.00102,
+    "toeslag_eur_kwh": 0.004,
+    "gsc_eur_kwh": 0.011,
+    "wkk_eur_kwh": 0.00392,
+    "afnametarief_eur_kwh": 0.0553921,
+    "bijzondere_accijns_eur_kwh": 0.046,
+    "bijdrage_op_de_energie_eur_kwh": 0,
+    "btw": 0.06
+  },
+  "creg_vlaams_gewest_eur_kwh": {
+    "2026-Q3": 0.3222,
+    "2026-Q4": 0.3225,
+    "2027-Q1": 0.3616
+  },
+  "creg_voorlopig": ["2027-Q1"]
+}
