@@ -13,14 +13,14 @@
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
 <style>
-:root{--bg:#fbfaf7;--ink:#16160f;--muted:#86857d;--grid:#e7e6df;--good:#17986a;--bad:#e2602a;--goodbg:#dcf2e8;--badbg:#fbe4d8}
-@media (prefers-color-scheme:dark){:root{--bg:#121211;--ink:#f1f0ea;--muted:#8f8e86;--grid:#2b2b28;--good:#35b98a;--bad:#f0794a;--goodbg:#15382b;--badbg:#452316}}
+:root{--bg:#fbfaf7;--ink:#16160f;--muted:#86857d;--grid:#e7e6df;--good:#17986a;--bad:#e2602a;--goodbg:#dcf2e8;--badbg:#fbe4d8;--net:#2a78d6;--sun:#d9a400}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--ink:#f1f0ea;--muted:#8f8e86;--grid:#2b2b28;--good:#35b98a;--bad:#f0794a;--goodbg:#15382b;--badbg:#452316;--net:#5a9aee;--sun:#f0c23a}}
 *{box-sizing:border-box}
 html,body{height:100%;height:100dvh;margin:0;background:var(--bg);color:var(--ink);overflow:hidden;overscroll-behavior:none}
 body{font:15px/1.2 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;font-variant-numeric:tabular-nums}
 #app{position:fixed;inset:0;display:flex;flex-direction:column;padding:max(10px,env(safe-area-inset-top)) env(safe-area-inset-right) max(6px,env(safe-area-inset-bottom)) env(safe-area-inset-left)}
 #read{flex:none;height:58px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px 0 12px}
-#when{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+#when{font-size:12px;white-space:nowrap;color:var(--muted);font-weight:600;letter-spacing:.02em}
 #price{font-size:26px;font-weight:680;letter-spacing:-.01em;white-space:nowrap}
 #price small{font-size:13px;font-weight:500;color:var(--muted);margin-left:3px}
 #chip{flex:none;padding:8px 12px;border-radius:999px;font-size:14px;font-weight:650;white-space:nowrap;text-align:right}
@@ -50,7 +50,7 @@ svg text.demo{font-size:34px;font-weight:800;fill:var(--muted);opacity:.22;lette
 "use strict";
 var TZ = "Europe/Brussels", QMS = 900000;
 var DEFAULT_TARIFFS = {"bijgewerkt":"2026-11-11","ecopower":{"factor_per_eur_mwh":0.00102,"toeslag_eur_kwh":0.004,"gsc_eur_kwh":0.011,"wkk_eur_kwh":0.00392,"afnametarief_eur_kwh":0.0553921,"bijzondere_accijns_eur_kwh":0.046,"bijdrage_op_de_energie_eur_kwh":0,"btw":0.06},"creg_vlaams_gewest_eur_kwh":{"2026-Q3":0.3222,"2026-Q4":0.3225,"2027-Q1":0.3616}};
-var S = { tariffs: DEFAULT_TARIFFS, days: {}, sel: null, demo: /[?&]demo=1/.test(location.search), lastDirect: 0, geo: null, view: null };
+var S = { tariffs: DEFAULT_TARIFFS, days: {}, chg: {}, sel: null, demo: /[?&]demo=1/.test(location.search), lastDirect: 0, geo: null, view: null };
 
 var partsFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 function bxl(ms) { var o = {}; partsFmt.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; }); return { date: o.year + "-" + o.month + "-" + o.day, h: +o.hour, m: +o.minute }; }
@@ -97,6 +97,7 @@ async function load() {
   try { var t = await getJSON("tariffs.json"); if (t && t.ecopower && t.creg_vlaams_gewest_eur_kwh) { S.tariffs = t; lsSet("ld_tariffs", JSON.stringify(t)); } }
   catch (e) { var c = lsGet("ld_tariffs"); if (c) try { S.tariffs = JSON.parse(c); } catch (x) {} }
   if (S.demo) { S.days = {}; S.days[today] = demoDay(today); S.days[tomorrow] = demoDay(tomorrow); return; }
+  try { var cj = await getJSON("data/charging.json"), cm = {}; Object.keys(cj.days || {}).forEach(function (d) { var m = {}; cj.days[d].forEach(function (x) { m[x[0] * 1000] = { ev: x[1], net: x[2] }; }); cm[d] = m; }); S.chg = cm; } catch (e) {}
   var days = {};
   try { var p = await getJSON("data/prices.json"); days = setDays(p.days); if (Object.keys(days).length) lsSet("ld_prices", JSON.stringify(p.days)); } catch (e) {}
   if (!days[today] || !days[tomorrow]) { var c2 = lsGet("ld_prices"); if (c2) try { var old = setDays(JSON.parse(c2)); [today, tomorrow].forEach(function (d) { if (!days[d] && old[d]) days[d] = old[d]; }); } catch (x) {} }
@@ -120,7 +121,7 @@ function render() {
   el("dayb").textContent = (S.view === today ? "vandaag · " : S.view === tomorrow ? "morgen · " : "") + dayLabelFmt.format(new Date(dayStartMs(S.view) + 12 * 3600000)).replace(".", "");
   el("prev").disabled = S.view <= first; el("next").disabled = S.view >= tomorrow;
   if (W < 50 || H < 80) { plot.innerHTML = ""; S.geo = null; return; }
-  var side = false, pw = W, ph = H, AX = 34, T = 12, B = 18;
+  var side = false, pw = W, ph = H, AX = 34, T = 12, B = 27;
   var lo = 0, hi = 50;
   Object.keys(S.days).concat(days).forEach(function (d) { hi = Math.max(hi, threshold(d) * 1.1); (S.days[d] || []).forEach(function (s) { if (s.p < lo) lo = s.p; if (s.p > hi) hi = s.p; }); });
   var ns = niceStep((hi - lo) / (ph > 260 ? 4.5 : 3)); lo = Math.floor(lo / ns) * ns; hi = Math.ceil(hi / ns) * ns;
@@ -132,7 +133,7 @@ function render() {
     for (var v = lo; v <= hi + 0.01; v += ns) g += '<line x1="' + x0 + '" x2="' + (x0 + iw) + '" y1="' + y(v) + '" y2="' + y(v) + '" style="stroke:var(--grid)" stroke-width="' + (v === 0 ? 1.5 : 1) + '"/><text x="' + (x0 - 5) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + n0(v) + "</text>";
     if (!s) {
       g += '<text class="wait" x="' + (x0 + iw / 2) + '" y="' + (py + T + ih / 2) + '" text-anchor="middle">' + (d > today ? "prijzen volgen rond 13 uur" : "geen prijzen") + "</text>";
-      for (var hh = 0; hh < 24; hh += 3) g += '<text x="' + (x0 + iw * hh / 24).toFixed(1) + '" y="' + (yb + 13) + '" text-anchor="' + (hh === 0 ? "start" : "middle") + '">' + pad(hh) + "</text>";
+      for (var hh = 0; hh < 24; hh += 3) g += '<text x="' + (x0 + iw * hh / 24).toFixed(1) + '" y="' + (yb + 22) + '" text-anchor="' + (hh === 0 ? "start" : "middle") + '">' + pad(hh) + "</text>";
     } else {
       var bw = iw / s.length, gap = bw > 3 ? 0.8 : 0.3;
       geo.push({ day: d, x0: x0, x1: x0 + iw, y0: py, y1: py + ph, bw: bw, n: s.length });
@@ -140,7 +141,8 @@ function render() {
         var x = x0 + i * bw + gap / 2, w = bw - gap, yz = y(0), y1 = y(sl.p), top = Math.min(yz, y1), h = Math.max(1.5, Math.abs(yz - y1));
         var past = d === today && sl.t + QMS <= now, isSel = S.sel && S.sel.day === d && S.sel.i === i;
         g += '<rect x="' + x.toFixed(2) + '" y="' + top.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + Math.min(1.5, w / 2).toFixed(2) + '" style="fill:var(' + (sl.p <= thr ? "--good" : "--bad") + ')" opacity="' + (isSel ? 1 : past ? 0.3 : 0.92) + '"/>';
-        var b = bxl(sl.t); if (b.m === 0 && b.h % 3 === 0) g += '<text x="' + (x0 + i * bw).toFixed(1) + '" y="' + (yb + 13) + '" text-anchor="' + (b.h === 0 ? "start" : "middle") + '">' + pad(b.h) + "</text>";
+        var cg = S.chg[d] && S.chg[d][sl.t]; if (cg) g += '<rect x="' + (x0 + i * bw).toFixed(2) + '" y="' + (yb + 3) + '" width="' + (bw + 0.3).toFixed(2) + '" height="6" style="fill:var(' + (cg.net >= cg.ev / 2 ? "--net" : "--sun") + ')"/>';
+        var b = bxl(sl.t); if (b.m === 0 && b.h % 3 === 0) g += '<text x="' + (x0 + i * bw).toFixed(1) + '" y="' + (yb + 22) + '" text-anchor="' + (b.h === 0 ? "start" : "middle") + '">' + pad(b.h) + "</text>";
       });
       if (ns0 && ns0.day === d) { var xn = x0 + (ns0.i + 0.5) * bw; g += '<line x1="' + xn + '" x2="' + xn + '" y1="' + (py + T - 5) + '" y2="' + yb + '" style="stroke:var(--ink)" stroke-width="1.4"/><circle cx="' + xn + '" cy="' + (py + T - 5) + '" r="3" style="fill:var(--ink)"/>'; }
       if (S.sel && S.sel.day === d) { var xs = x0 + (S.sel.i + 0.5) * bw, ys = y(s[S.sel.i].p); g += '<line x1="' + xs + '" x2="' + xs + '" y1="' + (py + T - 5) + '" y2="' + yb + '" style="stroke:var(--ink)" stroke-width="1" stroke-dasharray="2 3"/><circle cx="' + xs + '" cy="' + ys + '" r="4.5" style="fill:var(--bg);stroke:var(--ink)" stroke-width="2"/>'; }
@@ -159,7 +161,8 @@ function readout() {
   if (cur && S.days[cur.day] && S.days[cur.day][cur.i]) {
     var sl = S.days[cur.day][cur.i]; P = sl.p; day = cur.day;
     when.textContent = (S.sel ? "" : "nu · ") + hhmm(sl.t) + "–" + hhmm(sl.t + QMS);
-  } else if (s) { P = s.reduce(function (a, x) { return a + x.p; }, 0) / s.length; when.textContent = "daggemiddelde"; }
+    var cg = S.chg[day] && S.chg[day][sl.t]; if (cg) when.textContent += " · geladen " + n1(cg.ev / 1000) + " kWh" + (cg.net < cg.ev * 0.95 ? " (net " + n1(cg.net / 1000) + ")" : "");
+  } else if (s) { P = s.reduce(function (a, x) { return a + x.p; }, 0) / s.length; when.textContent = "daggemiddelde"; var cd = S.chg[day]; if (cd) { var te = 0, tn = 0; Object.keys(cd).forEach(function (k) { te += cd[k].ev; tn += cd[k].net; }); when.textContent += " · geladen " + n1(te / 1000) + " kWh (net " + n1(tn / 1000) + ")"; } }
   else { when.innerHTML = "&nbsp;"; price.innerHTML = "–"; chip.className = "none"; chip.textContent = ""; return; }
   var m = marginCt(day, P), ok = m >= 0;
   price.innerHTML = n0(P) + "<small>€/MWh</small>";

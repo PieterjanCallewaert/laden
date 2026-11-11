@@ -17,17 +17,32 @@ jobs:
         with:
           node-version: 20
       - name: Prijzen ophalen
+        id: prijzen
+        continue-on-error: true
         env:
           ENTSOE_TOKEN: ${{ secrets.ENTSOE_TOKEN }}
         run: node scripts/fetch_prices.mjs
+      - name: Laadsessies ophalen (Smappee)
+        continue-on-error: true
+        env:
+          SMAPPEE_CLIENT_ID: ${{ secrets.SMAPPEE_CLIENT_ID }}
+          SMAPPEE_CLIENT_SECRET: ${{ secrets.SMAPPEE_CLIENT_SECRET }}
+          SMAPPEE_USERNAME: ${{ secrets.SMAPPEE_USERNAME }}
+          SMAPPEE_PASSWORD: ${{ secrets.SMAPPEE_PASSWORD }}
+          SMAPPEE_LOCATION_ID: ${{ secrets.SMAPPEE_LOCATION_ID }}
+        run: node scripts/fetch_charging.mjs
       - name: Opslaan als er iets veranderd is
         run: |
-          if git diff --quiet -- data/prices.json; then
+          if [ -z "$(git status --porcelain -- data)" ]; then
             echo "Geen wijziging."
           else
             git config user.name "prijzen-bot"
             git config user.email "prijzen-bot@users.noreply.github.com"
-            git add data/prices.json
-            git commit -m "Kwartierprijzen bijgewerkt"
+            git add data
+            git commit -m "Gegevens bijgewerkt"
+            git pull --rebase
             git push
           fi
+      - name: Fout melden als de prijzen ontbraken
+        if: steps.prijzen.outcome == 'failure'
+        run: exit 1
