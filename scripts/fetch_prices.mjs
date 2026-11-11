@@ -87,30 +87,33 @@ async function fromEntsoe(from, to, token) {
 
 async function main() {
   const now = Math.floor(Date.now() / 1000);
-  const today = bxlDate(now), tomorrow = addDays(today, 1), wanted = [today, tomorrow];
+  const today = bxlDate(now), tomorrow = addDays(today, 1);
+  const KEEP = 14; // aantal dagen geschiedenis
+  const wanted = []; for (let i = -KEEP; i <= 1; i++) wanted.push(addDays(today, i));
   let old = { days: {} };
   try { old = JSON.parse(readFileSync(OUT, "utf8")); } catch {}
 
   let days = {}, source = null;
   const errors = [];
   try {
-    days = toDays(await fromEnergyCharts(addDays(today, -1), addDays(tomorrow, 1)), wanted);
+    days = toDays(await fromEnergyCharts(addDays(today, -KEEP - 1), addDays(tomorrow, 1)), wanted);
     if (Object.keys(days).length) source = "energy-charts.info (Fraunhofer ISE; data: ENTSO-E / EPEX Spot)";
   } catch (e) { errors.push(String(e.message || e)); }
 
   const token = process.env.ENTSOE_TOKEN;
   if (token && !(days[today] && (days[tomorrow] || !afterPublication(now)))) {
     try {
-      const d2 = toDays(await fromEntsoe(today, tomorrow, token), wanted);
+      const d2 = toDays(await fromEntsoe(addDays(today, -KEEP), tomorrow, token), wanted);
       for (const d of wanted) if (!days[d] && d2[d]) { days[d] = d2[d]; source = source ? source + " + ENTSO-E" : "ENTSO-E Transparency Platform"; }
     } catch (e) { errors.push(String(e.message || e)); }
   }
 
   // Nooit goede gegevens overschrijven met niets.
   const merged = {};
-  for (const d of wanted) { const v = days[d] || (old.days && old.days[d]); if (v) merged[d] = v; }
+  // Voorbije dagen blijven zoals ze bewaard zijn; vandaag en morgen worden ververst.
+  for (const d of wanted) { const o = old.days && old.days[d]; const v = d < today ? (o || days[d]) : (days[d] || o); if (v) merged[d] = v; }
   const same = JSON.stringify(merged) === JSON.stringify(old.days || {});
-  console.log(`vandaag ${today}: ${merged[today] ? merged[today].length : 0} kwartieren; morgen ${tomorrow}: ${merged[tomorrow] ? merged[tomorrow].length : 0} kwartieren`);
+  console.log(`${Object.keys(merged).length} dagen bewaard; vandaag ${today}: ${merged[today] ? merged[today].length : 0} kwartieren; morgen ${tomorrow}: ${merged[tomorrow] ? merged[tomorrow].length : 0} kwartieren`);
   if (errors.length) console.log("Meldingen: " + errors.join(" | "));
   if (!same) {
     writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), source: source || old.source || null, unit: "EUR/MWh", days: merged }) + "\n");
