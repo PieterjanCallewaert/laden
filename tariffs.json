@@ -16,5 +16,12 @@
     "2026-Q4": 0.3225,
     "2027-Q1": 0.3616
   },
-  "creg_voorlopig": ["2027-Q1"]
+  "creg_voorlopig": [
+    "2027-Q1"
+  ],
+  "injectie": {
+    "factor_per_eur_mwh": 0.00098,
+    "aftrek_eur_kwh": 0.015,
+    "opmerking": "Vergoeding voor injectie per kWh = factor x EPEX - aftrek (tariefkaart); gebruikt om gemiste injectie bij laden op zon te waarderen."
+  }
 }

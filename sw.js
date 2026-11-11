@@ -1,4 +1,4 @@
-var CACHE = "laden-v6";
+var CACHE = "laden-v7";
 self.addEventListener("install", function (e) { self.skipWaiting(); });
 self.addEventListener("activate", function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
