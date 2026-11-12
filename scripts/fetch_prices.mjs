@@ -1,4 +1,4 @@
-// Controle 11 nov: handmatig gestart via wijziging.
+// Controle 12 nov: handmatig gestart via wijziging.
 // Haalt de Belgische day-ahead kwartierprijzen (EUR/MWh) op voor vandaag en morgen
 // en bewaart ze in data/prices.json. Draait automatisch via GitHub Actions.
 // Bron 1: energy-charts.info (Fraunhofer ISE, geen sleutel nodig).
