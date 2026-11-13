@@ -1,6 +1,6 @@
 {
-  "bijgewerkt": "2026-11-11",
-  "bron": "Ecopower tariefkaart dynamische burgerstroom (vanaf 1 augustus 2026), gecontroleerd met factuur september 2026; CREG maximumtarieven thuisladen Vlaams Gewest",
+  "bijgewerkt": "2026-11-13",
+  "bron": "Ecopower tariefkaart dynamische burgerstroom (vanaf 1 augustus 2026), gecontroleerd met factuur oktober 2026; CREG maximumtarieven thuisladen Vlaams Gewest",
   "ecopower": {
     "factor_per_eur_mwh": 0.00102,
     "toeslag_eur_kwh": 0.004,
@@ -23,5 +23,6 @@
     "factor_per_eur_mwh": 0.00098,
     "aftrek_eur_kwh": 0.015,
     "opmerking": "Vergoeding voor injectie per kWh = factor x EPEX - aftrek (tariefkaart); gebruikt om gemiste injectie bij laden op zon te waarderen."
-  }
+  },
+  "laatste_factuur": "2026-10"
 }
