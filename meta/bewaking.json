@@ -1,6 +1,5 @@
 {
   "opmerking": "Instellingen voor de dagelijkse bewaking (scripts/health_check.mjs).",
   "sleutel_factuurtaak_vervalt": "2027-11-21",
-  "waarschuw_dagen_voor_vervallen": 30,
-  "testmelding": "tweede proef, 21 november 10:30"
+  "waarschuw_dagen_voor_vervallen": 30
 }
