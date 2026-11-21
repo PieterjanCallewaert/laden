@@ -52,7 +52,7 @@ jobs:
               }
             } else {
               for (const i of open) {
-                await github.rest.issues.createComment({ owner, repo, issue_number: i.number, body: "Opgelost: de bewaking vindt geen problemen meer." });
-                await github.rest.issues.update({ owner, repo, issue_number: i.number, state: "closed" });
+                // Alleen sluiten, zonder extra reactie: zo komt er bij het oplossen één e-mail in plaats van twee.
+                await github.rest.issues.update({ owner, repo, issue_number: i.number, state: "closed", state_reason: "completed" });
               }
             }
