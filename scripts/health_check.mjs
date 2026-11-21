@@ -28,7 +28,7 @@ export function check(now, { prices, charging, tariffs, cfg }) {
   if (exp) { const days = Math.round((new Date(exp + "T12:00:00Z") - new Date(today + "T12:00:00Z")) / 86400000);
     if (days <= 0) p.push(`De GitHub-sleutel van de factuurtaak is vervallen op ${exp}: maak een nieuwe aan.`);
     else if (days <= (cfg.waarschuw_dagen_voor_vervallen || 30)) p.push(`De GitHub-sleutel van de factuurtaak vervalt over ${days} dagen (${exp}): maak tijdig een nieuwe aan.`); }
-  if (cfg.testmelding) p.push("TESTMELDING: dit is een proefmelding van de bewaking. Er is niets mis.");
+  if (cfg.testmelding) p.push("TESTMELDING: dit is een proefmelding van de bewaking. Er is niets mis." + (typeof cfg.testmelding === "string" ? " (" + cfg.testmelding + ")" : ""));
   return p;
 }
 
