@@ -1,0 +1,42 @@
+name: Tarieven bijwerken
+on:
+  workflow_dispatch:
+    inputs:
+      factuur:
+        description: "Factuurperiode, bv. 2026-11"
+        required: true
+      waarden:
+        description: 'Ecopower-velden als JSON, bv. {"afnametarief_eur_kwh":0.0554}'
+        required: true
+        default: "{}"
+permissions:
+  contents: write
+concurrency:
+  group: prijzen
+  cancel-in-progress: false
+jobs:
+  bijwerken:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Controleren en toepassen
+        env:
+          FACTUUR: ${{ inputs.factuur }}
+          WAARDEN: ${{ inputs.waarden }}
+        run: node scripts/update_tariffs.mjs
+      - name: Opslaan als er iets veranderd is
+        env:
+          FACTUUR: ${{ inputs.factuur }}
+        run: |
+          if [ -z "$(git status --porcelain -- tariffs.json)" ]; then
+            echo "Geen wijziging."
+          else
+            git config user.name "tarieven-bot"
+            git config user.email "tarieven-bot@users.noreply.github.com"
+            git add tariffs.json
+            git commit -m "Tarieven bijgewerkt met factuur $FACTUUR"
+            for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done
+          fi
