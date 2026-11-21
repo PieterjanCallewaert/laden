@@ -55,8 +55,10 @@ async function main() {
     const v = refetched ? fresh[d] : (old.days && old.days[d]);
     if (v && v.length) merged[d] = v;
   }
-  if (JSON.stringify(merged) !== JSON.stringify(old.days || {}) || first) {
-    writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), version: VERSION, unit: "Wh per kwartier: [start, geladen, waarvan uit het net (schatting)]", days: merged }) + "\n");
+  // 'gecontroleerd' verandert hoogstens één keer per dag, zodat de bewaking ziet dat Smappee bereikbaar is
+  // ook op dagen zonder laden.
+  if (JSON.stringify(merged) !== JSON.stringify(old.days || {}) || first || old.gecontroleerd !== today) {
+    writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), gecontroleerd: today, version: VERSION, unit: "Wh per kwartier: [start, geladen, waarvan uit het net (schatting)]", days: merged }) + "\n");
     console.log("data/charging.json bijgewerkt.");
   }
   console.log("Dagen met laden: " + Object.keys(merged).length);
