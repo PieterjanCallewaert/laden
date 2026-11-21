@@ -1,0 +1,58 @@
+name: Bewaking
+# Kijkt elke dag na of de automatisering van de laadgrafiek nog loopt.
+# Alles in orde: geen melding. Probleem: GitHub opent een melding (issue) in deze repository,
+# waarvan Pieterjan een e-mail krijgt. Is het probleem opgelost, dan wordt de melding gesloten.
+on:
+  schedule:
+    - cron: "43 15 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "meta/bewaking.json"
+      - "scripts/health_check.mjs"
+      - ".github/workflows/bewaking.yml"
+permissions:
+  contents: read
+  issues: write
+jobs:
+  controleren:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Controleren
+        id: check
+        run: |
+          set +e
+          node scripts/health_check.mjs > uitslag.txt
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat uitslag.txt
+      - name: Melding openen, bijwerken of sluiten
+        uses: actions/github-script@v7
+        env:
+          CODE: ${{ steps.check.outputs.code }}
+        with:
+          script: |
+            const fs = require("fs");
+            const uitslag = fs.readFileSync("uitslag.txt", "utf8").trim();
+            const probleem = process.env.CODE !== "0";
+            const { owner, repo } = context.repo;
+            const open = (await github.rest.issues.listForRepo({ owner, repo, state: "open", labels: "bewaking" })).data;
+            const tekst = uitslag.replace(/^PROBLEMEN:\n/, "") +
+              "\n\nUitleg en oplossing: vraag het aan Claude in het project Home Energy en plak deze melding.";
+            if (probleem) {
+              if (open.length === 0) {
+                await github.rest.issues.create({ owner, repo, title: "Laadgrafiek: probleem gevonden", body: tekst, labels: ["bewaking"] });
+              } else if ((open[0].body || "").trim() !== tekst.trim()) {
+                await github.rest.issues.update({ owner, repo, issue_number: open[0].number, body: tekst });
+                await github.rest.issues.createComment({ owner, repo, issue_number: open[0].number, body: "Bijgewerkt:\n\n" + tekst });
+              }
+            } else {
+              for (const i of open) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: i.number, body: "Opgelost: de bewaking vindt geen problemen meer." });
+                await github.rest.issues.update({ owner, repo, issue_number: i.number, state: "closed" });
+              }
+            }
